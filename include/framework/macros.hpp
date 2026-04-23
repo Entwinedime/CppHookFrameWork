@@ -1,7 +1,7 @@
 #pragma once
 
-#include "framework/hook_target.h"
-#include "framework/invoke.h"
+#include "framework/hook_target.hpp"
+#include "framework/invoke.hpp"
 
 #define HOOKFW_PP_CAT_IMPL(a, b) a##b
 #define HOOKFW_PP_CAT(a, b) HOOKFW_PP_CAT_IMPL(a, b)

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "framework/hook_arg_info.h"
-#include "framework/hook_target.h"
-#include "framework/relation_rules.h"
-#include "framework/scoped_timer.h"
+#include "framework/hook_arg_info.hpp"
+#include "framework/hook_target.hpp"
+#include "framework/relation_rules.hpp"
+#include "framework/scoped_timer.hpp"
 #include <initializer_list>
 #include <stdint.h>
 #include <type_traits>

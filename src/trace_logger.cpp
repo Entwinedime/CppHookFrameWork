@@ -1,5 +1,5 @@
-#include "framework/trace_logger.h"
-#include "framework/common.h"
+#include "framework/trace_logger.hpp"
+#include "framework/common.hpp"
 #include <iostream>
 #include <sstream>
 #include <string>

@@ -1,5 +1,5 @@
-#include "framework/pmu_recorder.h"
-#include "framework/common.h"
+#include "framework/pmu_recorder.hpp"
+#include "framework/common.hpp"
 #if defined(HOOK_ENABLE_PAPI)
 #include <papi.h>
 #endif

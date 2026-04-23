@@ -1,4 +1,4 @@
-#include "framework/symbol_resolver.h"
+#include "framework/symbol_resolver.hpp"
 #include <cstdlib>
 #include <dlfcn.h>
 #include <iostream>

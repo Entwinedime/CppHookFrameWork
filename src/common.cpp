@@ -1,4 +1,4 @@
-#include "framework/common.h"
+#include "framework/common.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstdio>

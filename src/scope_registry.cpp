@@ -1,4 +1,4 @@
-#include "framework/scope_registry.h"
+#include "framework/scope_registry.hpp"
 
 namespace HookFrameWork {
 

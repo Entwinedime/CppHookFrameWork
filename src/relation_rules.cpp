@@ -1,5 +1,5 @@
-#include "framework/relation_rules.h"
-#include "framework/scope_registry.h"
+#include "framework/relation_rules.hpp"
+#include "framework/scope_registry.hpp"
 #include <cstdio>
 #include <dlfcn.h>
 

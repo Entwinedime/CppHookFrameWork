@@ -1,9 +1,9 @@
 #pragma once
 
-#include "framework/common.h"
-#include "framework/hook_arg_info.h"
-#include "framework/pmu_recorder.h"
-#include "framework/trace_logger.h"
+#include "framework/common.hpp"
+#include "framework/hook_arg_info.hpp"
+#include "framework/pmu_recorder.hpp"
+#include "framework/trace_logger.hpp"
 #include <initializer_list>
 #include <sstream>
 #include <stdint.h>

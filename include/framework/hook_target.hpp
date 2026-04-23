@@ -1,7 +1,7 @@
 #pragma once
 
-#include "framework/scope_registry.h"
-#include "framework/symbol_resolver.h"
+#include "framework/scope_registry.hpp"
+#include "framework/symbol_resolver.hpp"
 #include <cstdio>
 #include <cstring>
 #include <dlfcn.h>
