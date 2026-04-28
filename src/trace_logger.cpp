@@ -9,8 +9,7 @@
 namespace {
 
 // 未配置 HOOK_TRACE_OUTPUT 时使用的默认输出路径。
-const std::string kDefaultTraceOutputPath{ "/root/RecSDK-develop_examples_and_tools/examples/dlrm/model/traces/"
-                                           "cpu_trace.json" };
+const std::string kDefaultTraceOutputPath{ "cpu_trace.json" };
 
 } // namespace
 

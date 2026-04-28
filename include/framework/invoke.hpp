@@ -32,7 +32,7 @@ __attribute__((always_inline)) inline auto InvokeHook(HookTarget<FnType> & targe
         else { return real_fn(std::forward<Args>(args)...); }
     }
 
-    ScopedTimer timer(target.TraceName(), trace_args, std::forward<Args>(args)...);
+    ScopedTimer timer(target.TraceName(), trace_args);
     if constexpr (std::is_void<decltype(real_fn(std::forward<Args>(args)...))>::value) {
         real_fn(std::forward<Args>(args)...);
         return;

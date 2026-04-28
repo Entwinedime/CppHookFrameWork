@@ -1,121 +1,170 @@
-# Hook Framework (Modular)
+# Hook Framework
 
-A lightweight, modular C++ hooking framework designed for performance profiling (PAPI), call-chain tracing, and dynamic argument inspection. It allows for fine-grained control over which functions are intercepted and under what calling contexts they should be recorded.
+This repository contains a lightweight C++ hook framework for dynamic function interception, call-site filtering, argument logging, and optional PAPI-based PMU collection. The current examples are wired for Ascend and CPUInfer targets, but the framework itself is generic.
 
----
+## What It Does
 
-## 1. Features
-- **Modular Design**: Decouples hook definitions from the core logic, making it easy to extend.
-- **Context-Aware Tracing (Rule Map)**: Supports `Caller -> Callee` filtering to reduce noise and overhead.
-- **Performance Monitoring**: Integrated with **PAPI** (Performance Application Programming Interface) for hardware counter analysis (e.g., Cycles, Cache Misses).
-- **Dynamic Argument Capture**: Inspect and log function arguments with metadata.
-- **Lazy Symbol Resolution**: Symbols are resolved only when the function is first invoked.
+The hook library is loaded with `LD_PRELOAD`. Each intercepted function resolves the original symbol from a target shared library, checks whether the current caller should be traced, and then executes the real function while recording timing, arguments, and optional performance counters.
 
----
+The current implementation supports:
 
-## 2. Build Instructions
+- Lazy symbol resolution with `dlopen` and `dlsym`.
+- Rule-based caller-to-callee filtering.
+- Function argument capture for trace output.
+- Optional PAPI event collection when the library is available.
+- Chrome trace style JSON output.
 
-### Prerequisites
+## Repository Layout
 
-- CMake 3.10+
-- C++17 compatible compiler
-- PAPI library (Optional, for performance counters)
+- `hook.cpp` contains the active hook targets and examples.
+- `include/framework/` contains the framework headers.
+- `src/` contains the framework implementation.
+- `build/` is the CMake build directory.
 
-### Compilation
+## Build
+
+### Requirements
+
+- CMake 3.16 or newer
+- A C++17 compiler
+- `dl`
+- Optional: PAPI development libraries if you want PMU counters
+
+### Configure and Build
 
 ```bash
-cd hook
-# Enable PAPI for hardware performance counters
 cmake -S . -B build -DHOOK_ENABLE_PAPI=ON
 cmake --build build -j$(nproc)
 ```
-**Output**: `hook/libhook.so`
 
----
+The shared library is written to the repository root as `libhook.so`.
 
-## 3. Rule Map (Scope Filtering)
+If PAPI is not available on your machine, build without it:
 
-The framework maintains a map of rules to determine when a trace should be triggered.
-
-- **Global Trace**: If the caller list for a callee is empty, the function is always traced.
-- **Restricted Trace**: If a caller list is provided, the hook only triggers if the current call site resides within the scope of one of the specified callers.
-
-**Configuration (Declare in `hook.cpp`):**
-
-```cpp
-// Only trace "memcpy_s" when called from within Foo or Bar
-HOOKFW_SET_RULE("memcpy_s",
-                "MxRec::A::Foo",
-                "MxRec::B::Bar");
+```bash
+cmake -S . -B build -DHOOK_ENABLE_PAPI=OFF
+cmake --build build -j$(nproc)
 ```
 
----
+## Runtime Output
 
-## 4. Capturing Function Arguments
+Trace events are written as JSON to a file in the current working directory by default.
 
-To capture arguments, provide a list of pairs containing the argument position (0-indexed) and a descriptive name.
+By default, the output file name is based on the current rank and process id:
 
-```cpp
-// Capturing the 'self' pointer at pos 0 and 'a' at pos 1
-HOOKFW_INVOKE(foo, {{0, "this"}, {1, "input_val"}}, self, a);
+```text
+cpu_trace.json.rank<RANK>.pid<PID>.json
 ```
 
----
+You can override the base path with `HOOK_TRACE_OUTPUT`.
 
-## 5. Adding New Hook Targets
+The rank suffix is derived from one of these environment variables, in order:
 
-Follow this 3-step pattern in `hook.cpp` to intercept a new function:
+- `RANK_ID`
+- `HOROVOD_RANK`
+- `OMPI_COMM_WORLD_RANK`
 
-### Step 1: Define the Function Prototype
+If none of them are set, the rank is reported as `unknown`.
+
+## How Hooking Works
+
+Each target is registered with `HOOKFW_DEFINE_TARGET`, which stores:
+
+- a human-readable trace name,
+- the mangled symbol name,
+- and the target shared library path.
+
+When the hook wrapper calls `HOOKFW_INVOKE`, the framework:
+
+1. Resolves the original symbol from the target shared library.
+2. Registers the resolved function scope for caller filtering.
+3. Checks whether the current caller matches the rule map.
+4. Records duration, arguments, and PMU deltas if enabled.
+
+If symbol resolution fails, the process exits with a fatal error.
+
+## Rule Filtering
+
+The rule map controls which call sites are traced for a given callee.
+
+- If no rule exists for a callee, tracing is enabled for all callers.
+- If a callee has an empty caller list, tracing is also enabled for all callers.
+- If callers are configured, the hook only records events when the return address belongs to one of those caller scopes.
+
+Example:
+
 ```cpp
-using foo_fn_t = int (*)(void* self, int a);
+HOOKFW_SET_RULE("aclrtStreamWaitEvent",
+                "CPUInfer::submit",
+                "CPUInfer::sync");
 ```
 
-### Step 2: Register the Target
-Use the `HOOKFW_DEFINE_TARGET` macro to provide metadata for symbol resolution.
+## Capturing Arguments
+
+Arguments are passed to `HOOKFW_INVOKE` as a list of name/value pairs that are already stringified by the hook wrapper.
+
 ```cpp
-HOOKFW_DEFINE_TARGET(foo,            // Unique identifier
-                     foo_fn_t,       // Function signature type
-                     "Namespace::Class::Foo", // Human-readable name
-                     "_ZN9Namespace5Class3FooEPvi", // Mangled symbol name
-                     "/path/to/libtarget.so")       // Source library path
+HOOKFW_INVOKE(example, {{"stream", std::to_string(reinterpret_cast<uintptr_t>(stream))},
+                        {"event", std::to_string(reinterpret_cast<uintptr_t>(event))}},
+              stream,
+              event);
 ```
 
-### Step 3: Implement the Hook Wrapper
-Use the `asm` keyword to ensure the hook matches the target's mangled name.
+Those names and values are emitted under the `Function-Args` section in the trace JSON.
+
+## Adding a New Hook Target
+
+To hook a new function, follow the same pattern used in `hook.cpp`.
+
+### 1. Declare the function type
+
+```cpp
+using example_fn_t = int (*)(void * self, int value);
+```
+
+### 2. Register the target
+
+```cpp
+HOOKFW_DEFINE_TARGET(example,
+                     example_fn_t,
+                     "Example::run",
+                     "_ZN7Example3runEi",
+                     "/path/to/libexample.so")
+```
+
+### 3. Implement the wrapper
+
 ```cpp
 int __attribute__((noinline, visibility("default")))
-foo_hook(void* self, int a) asm("_ZN9Namespace5Class3FooEPvi");
+example_hook(void * self, int value) asm("_ZN7Example3runEi");
 
-int foo_hook(void* self, int a) {
-    // Automatically handles: symbol resolve, scope check, PAPI counters, and logging
-    return HOOKFW_INVOKE(foo, {{1, "a"}}, self, a);
+int example_hook(void * self, int value) {
+    return HOOKFW_INVOKE(example, {{"self", std::to_string(reinterpret_cast<uintptr_t>(self))},
+                                    {"value", std::to_string(value)}},
+                         self,
+                         value);
 }
 ```
 
----
+The `asm(...)` declaration must match the exported symbol exactly.
 
-## 6. Execution
+## PAPI / PMU Collection
 
-Inject the hook library into your target application using `LD_PRELOAD`:
+PMU collection is optional and requires PAPI support at build time. At runtime, the recorder also checks the `HOOK_ENABLE_PAPI` environment variable, so PMU collection can be turned on or off without rebuilding.
 
-```bash
-export LD_PRELOAD=./libhook.so
-./your_executable
+If `HOOK_ENABLE_PAPI` is unset, the runtime default is enabled. Set it to a false-like value such as `0`, `false`, `off`, or `no` to disable PMU collection at runtime.
+
+At runtime, the recorder reads events from `HOOK_PAPI_EVENTS` if it is set. Otherwise, it falls back to:
+
+```text
+perf::CYCLES,perf::INSTRUCTIONS,perf::CACHE-REFERENCES,perf::CACHE-MISSES
 ```
 
----
+If PAPI is unavailable or the configured events cannot be initialized, the hook still works without PMU data.
 
-## 7. Technical Details
+## Notes
 
-### Automation Logic
-When a hooked function is called, the framework automatically:
-1. **One-time Symbol Resolution**: Uses `dlsym` to find the original function address.
-2. **Scope Registration**: Tracks the entry/exit of functions to maintain a thread-local call stack.
-3. **Rule Validation**: Checks the Rule Map to see if the current caller is authorized for tracing.
-4. **PMU Output**: If PAPI is enabled and rules match, it records hardware performance counters for the duration of the function call.
-
-### Important Notes
-- **Name Mangling**: Ensure the `asm("_Z...")` string exactly matches the symbol in the target binary. Use `nm -D <library>` to verify.
-- **Inlining**: If the compiler inlines the target function, the hook will not trigger. Compile the target with `-fno-inline` or `-O0` for best results during debugging.
-- **Recursion**: The framework includes internal guards to prevent infinite loops if the hook logic calls the intercepted function.
+- Keep the mangled symbol names exact. A mismatch will prevent the hook from resolving the original function.
+- If the compiler inlines the target function, the hook may never be hit.
+- The current examples are specific to the paths in `hook.cpp`; they are not portable as-is.
+- The trace output is JSON and can be consumed by trace viewers that understand Chrome trace event format.

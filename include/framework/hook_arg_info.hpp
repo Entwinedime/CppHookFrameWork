@@ -1,13 +1,12 @@
 #pragma once
 
-#include <cstddef>
 #include <string>
 
 namespace HookFrameWork {
 
 struct HookArgInfo {
-    size_t arg_position;
-    std::string arg_name;
+    const std::string name;
+    const std::string value_in_string;
 };
 
 } // namespace HookFrameWork

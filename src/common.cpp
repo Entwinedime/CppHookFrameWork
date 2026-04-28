@@ -14,7 +14,7 @@ std::string GetFirstNonEmptyEnv(const std::vector<std::string> & env_names) {
         const std::string value{ safe_env(env_names[i].c_str()) };
         if (!value.empty()) { return value; }
     }
-    return nullptr;
+    return "";
 }
 
 std::string GetRankString() {
